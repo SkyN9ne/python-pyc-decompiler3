@@ -673,6 +673,9 @@ class Python37LambdaParser(Python37LambdaCustom, PythonParserLambda):
         store           ::= expr STORE_ATTR
         store           ::= store_subscript
         store_subscript ::= expr expr STORE_SUBSCR
+        store           ::= BB_STMTS_START store
+        store           ::= store BB_STMTS_END
+
         """
 
 
