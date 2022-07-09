@@ -337,6 +337,76 @@ class Scanner37Base(Scanner):
                     self.load_asserts.add(load_global_inst.offset)
                 pass
 
+        # In the loops below, we will try to find large basic blocks of
+        # assignment statements that we can parse fast by delimiting
+        # instructions.
+        bb_inst_begin = None
+        jump_types = set(["jrel", "jabs"])
+        bb_ranges = []
+        last_range = []
+        for i, inst in enumerate(self.insts):
+
+            # One artifact of the "too-small" operand problem, is that
+            # some backward jumps, are turned into forward jumps to another
+            # "extended arg" backward jump to the same location.
+
+            if inst.opname.startswith("STORE_") or inst.opname == "RETURN":
+                if bb_inst_begin is not None:
+                    last_range[-1] = i
+                else:
+                    bb_inst_begin = inst
+                    last_range = [i, i]
+            elif inst.optype in jump_types:
+                if last_range and last_range[0] != last_range[1]:
+                    # save range in LIFO order since we that is the
+                    # way we will be inserting instructions.
+                    bb_ranges.insert(0, last_range)
+                last_range = []
+                bb_inst_begin = None
+
+        if last_range and last_range[0] != last_range[1]:
+            bb_ranges.insert(0, last_range)
+
+        for bb_range in bb_ranges:
+            first, last = bb_range
+            if last - first > 5:
+                inst = self.insts[last]
+                self.insts.insert(
+                    last + 1,
+                    Instruction(
+                        opname="BB_STMTS_END",
+                        opcode=-2,
+                        optype="pseudo",
+                        inst_size=2,
+                        arg=None,
+                        argval=None,
+                        argrepr="",
+                        has_arg=False,
+                        offset=f"{inst.offset}_0",
+                        starts_line=False,
+                        is_jump_target=False,
+                        has_extended_arg=False,
+                    ),
+                )
+                inst = self.insts[first]
+                self.insts.insert(
+                    first + 1,
+                    Instruction(
+                        opname="BB_STMTS_START",
+                        opcode=-2,
+                        optype="pseudo",
+                        inst_size=2,
+                        arg=None,
+                        argval=None,
+                        argrepr="",
+                        has_arg=False,
+                        offset=f"{inst.offset}_0",
+                        starts_line=False,
+                        is_jump_target=False,
+                        has_extended_arg=False,
+                    ),
+                )
+
         # Operand values in Python wordcode are small. As a result,
         # there are these EXTENDED_ARG instructions - way more than
         # before 3.6. These parsing a lot of pain.
@@ -811,6 +881,12 @@ class Scanner37Base(Scanner):
         for struct in self.structs:
             current_start = struct["start"]
             current_end = struct["end"]
+            if (
+                isinstance(current_start, str)
+                or isinstance(current_end, str)
+                or isinstance(offset, str)
+            ):
+                continue
             if (current_start <= offset < current_end) and (
                 current_start >= start and current_end <= end
             ):

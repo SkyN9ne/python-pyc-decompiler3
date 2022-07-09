@@ -518,9 +518,11 @@ class Python37Parser(Python37LambdaParser):
         """
 
     def p_grammar(self, args):
-        """sstmt ::= stmt
+        """
+        sstmt ::= stmt
         sstmt ::= ifelsestmtr
         sstmt ::= return RETURN_LAST
+        sstmt ::= BB_STMTS_START stmts BB_STMTS_END
 
         return_if_stmts ::= return_if_stmt come_from_opt
         return_if_stmts ::= _stmts return_if_stmt _come_froms
